@@ -1,9 +1,11 @@
-use std::{thread, time::Duration};
+use std::{collections::HashMap, iter::Map, thread, time::Duration};
 
 use ethers::{types::Address, utils::__serde_json::json};
 
 #[async_recursion::async_recursion]
-pub async fn get_address_label(addresses: Vec<Address>) -> anyhow::Result<Vec<Option<String>>> {
+pub async fn get_address_label(
+    addresses: Vec<Address>,
+) -> anyhow::Result<HashMap<Address, (Option<Address>, Option<String>)>> {
     let client = reqwest::Client::new();
     let json = json!({
         "addresses": addresses,
@@ -16,17 +18,26 @@ pub async fn get_address_label(addresses: Vec<Address>) -> anyhow::Result<Vec<Op
         .await?
         .json::<serde_json::Value>()
         .await?;
-    println!("Response: {:?}", resp);
+    // println!("Response: {:?}", resp);
     let status = resp.get("code").and_then(|v| v.as_u64());
-    let opt = resp.as_array().map(|arr| {
-        arr.iter()
-            .map(|obj| {
-                obj.get("label")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            })
-            .collect()
-    });
+    let opt: Option<HashMap<Address, (Option<Address>, Option<String>)>> =
+        resp.as_array().map(|arr| {
+            arr.iter()
+                .map(|obj| {
+                    let address: Option<Address> = obj
+                        .get("address")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.parse().ok())
+                        .and_then(|v| v);
+                    let label = obj
+                        .get("label")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    (address.unwrap(), (address, label))
+                })
+                .collect()
+        });
+
     // hacky retry logic, need to model these errors properly
     if let Some(s) = status {
         if s == 40000000 {
@@ -37,10 +48,18 @@ pub async fn get_address_label(addresses: Vec<Address>) -> anyhow::Result<Vec<Op
     }
 
     match opt {
-        Some(labels) => Ok(labels),
+        Some(mut labels) => {
+            for address in addresses {
+                // search if this address is in the vec
+                if labels.get(&address).is_none() {
+                    labels.insert(address, (None, None));
+                }
+            }
+            Ok(labels)
+        }
         None => {
             println!("Failed to get label for addresses: {}", resp);
-            Ok(vec![])
+            Ok(HashMap::new())
         }
     }
 }
