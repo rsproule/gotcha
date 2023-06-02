@@ -82,6 +82,7 @@ async fn get_counter_parties(
     graph: Arc<Mutex<CounterPartyGraph>>,
 ) -> anyhow::Result<()> {
     let transactions = etherscan_client.get_transactions(&address, None).await?;
+    println!("Getting counterparties for: {}", address.to_string());
     let mut graph_unlocked = graph.lock().await;
 
     if graph_unlocked.contains(&address) {
@@ -128,12 +129,16 @@ async fn get_counter_parties(
 
     println!("Received from: {:?}", rec_from.len());
     println!("Sent to: {:?}", sent_to.len());
+    // TODO: add edges to graph
+
+    // release the lock 
+    drop(graph_unlocked);
     for back_address in rec_from {
-        graph_unlocked.add_edge(back_address, address);
+        // graph_unlocked.add_edge(back_address, address);
         get_counter_parties(back_address, etherscan_client, graph.clone()).await?;
     }
     for forward_address in sent_to {
-        graph_unlocked.add_edge(forward_address, address);
+        // graph_unlocked.add_edge(forward_address, address);
         get_counter_parties(forward_address, etherscan_client, graph.clone()).await?;
     }
     Ok(())
