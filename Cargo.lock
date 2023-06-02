@@ -531,6 +531,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "crawl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-recursion",
+ "clap",
+ "ethers",
+ "ethers-etherscan",
+ "reqwest",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "crc32fast"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -693,6 +707,12 @@ dependencies = [
  "redox_users",
  "winapi",
 ]
+
+[[package]]
+name = "dot"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a74b6c4d4a1cff5f454164363c16b72fa12463ca6b31f4b5f2035a65fa3d5906"
 
 [[package]]
 name = "dunce"
@@ -1372,20 +1392,6 @@ dependencies = [
  "futures-core",
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "gotcha"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-recursion",
- "clap",
- "ethers",
- "ethers-etherscan",
- "reqwest",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -3355,6 +3361,16 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "viz"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dot",
+ "petgraph",
+]
 
 [[package]]
 name = "walkdir"
