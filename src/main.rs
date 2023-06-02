@@ -20,11 +20,10 @@ async fn main() -> anyhow::Result<()> {
     let address: Address = args.address.parse()?;
     println!("Running analysis for address: {}", address.to_string());
     let etherscan_client = Client::new_from_env(Chain::Mainnet)?;
-    // todo: move to minimal shared state, need this for exit condition
     let seen = Arc::new(Mutex::new(Vec::<Address>::new()));
-    let binding = metadock_client::get_address_label(vec![address]).await?;
-    // let label: Option<String> = binding.get(0).and_then(|(_, l)| l.clone());
-    get_counter_parties(address, &None, &etherscan_client, Arc::clone(&seen)).await?;
+    let binding = metadock_client::get_address_label(vec![address], 1).await?;
+    let label: Option<String> = binding.get(&address).and_then(|l| l.clone());
+    get_counter_parties(address, &label, &etherscan_client, Arc::clone(&seen)).await?;
     Ok(())
 }
 
@@ -91,23 +90,20 @@ async fn get_counter_parties(
         }
     }
     drop(seen_unlocked);
-    let labelled_addresses = metadock_client::get_address_label(new_nodes.clone()).await?;
-    // println!("labelled_addresses: {:?}", labelled_addresses);
-    for (address, (_, label)) in labelled_addresses {
+    let labelled_addresses = metadock_client::get_address_label(new_nodes.clone(), 1).await?;
+    for (address, label) in labelled_addresses {
         // gonna use this as main output
         println!(
             "Node: {:?}-{}",
             address,
             match label.clone() {
                 Some(l) => l,
-                None => "".to_string(),
+                None => "_NONE_".to_string(),
             }
         );
-        // if let Some(address) = address {
         if label.is_none() {
             get_counter_parties(address, &label, etherscan_client, Arc::clone(&seen)).await?;
         }
-        // }
     }
     Ok(())
 }
