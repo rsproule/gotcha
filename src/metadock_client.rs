@@ -1,9 +1,12 @@
+use std::{thread, time::Duration};
+
 use ethers::{types::Address, utils::__serde_json::json};
 
-pub async fn get_address_label(address: Address) -> anyhow::Result<Option<String>> {
+#[async_recursion::async_recursion]
+pub async fn get_address_label(addresses: Vec<Address>) -> anyhow::Result<Vec<Option<String>>> {
     let client = reqwest::Client::new();
     let json = json!({
-        "addresses": vec![address],
+        "addresses": addresses,
         "chain": "eth".to_string()
     });
     let resp = client
@@ -13,13 +16,31 @@ pub async fn get_address_label(address: Address) -> anyhow::Result<Option<String
         .await?
         .json::<serde_json::Value>()
         .await?;
-    let opt = || -> Option<String> { Some(resp.get(0)?.get("label")?.as_str()?.to_string()) };
+    println!("Response: {:?}", resp);
+    let status = resp.get("code").and_then(|v| v.as_u64());
+    let opt = resp.as_array().map(|arr| {
+        arr.iter()
+            .map(|obj| {
+                obj.get("label")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .collect()
+    });
+    // hacky retry logic, need to model these errors properly
+    if let Some(s) = status {
+        if s == 40000000 {
+            println!("Got rate limit, retrying");
+            thread::sleep(Duration::from_secs(1));
+            return get_address_label(addresses).await;
+        }
+    }
 
-    match opt() {
-        Some(label) => Ok(Some(label)),
+    match opt {
+        Some(labels) => Ok(labels),
         None => {
-            println!("Failed to get label for address: {}", resp);
-            Ok(None)
+            println!("Failed to get label for addresses: {}", resp);
+            Ok(vec![])
         }
     }
 }

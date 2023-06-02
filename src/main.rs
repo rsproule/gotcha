@@ -23,7 +23,15 @@ async fn main() -> anyhow::Result<()> {
     let etherscan_client = Client::new_from_env(Chain::Mainnet)?;
 
     let counter_party_graph = Arc::new(Mutex::new(CounterPartyGraph::new()));
-    get_counter_parties(address, &etherscan_client, Arc::clone(&counter_party_graph)).await?;
+    let label = metadock_client::get_address_label(vec![address]).await?;
+    get_counter_parties(
+        address,
+        // label[0].clone(),
+        None,
+        &etherscan_client,
+        Arc::clone(&counter_party_graph),
+    )
+    .await?;
     // println!("Counter party data: {:?}", counter_party_graph.lock().await);
     let graph = counter_party_graph.lock().await;
     for node in graph.nodes.values() {
@@ -78,6 +86,7 @@ impl CounterPartyGraph {
 #[async_recursion]
 async fn get_counter_parties(
     address: Address,
+    label: Option<String>,
     etherscan_client: &Client,
     graph: Arc<Mutex<CounterPartyGraph>>,
 ) -> anyhow::Result<()> {
@@ -102,14 +111,14 @@ async fn get_counter_parties(
             None
         }
     };
-    // need to back off and retry for this, keep getting throttled 
-    let label = match metadock_client::get_address_label(address).await {
-        Ok(l) => l,
-        Err(e) => {
-            println!("Error getting address label: {:?}", e);
-            None
-        }
-    };
+    // need to back off and retry for this, keep getting throttled
+    // let label = match metadock_client::get_address_label(vec![address]).await {
+    //     Ok(l) => l.first().map(|l| l.to_string()),
+    //     Err(e) => {
+    //         println!("Error getting address label: {:?}", e);
+    //         None
+    //     }
+    // };
 
     let mut graph_unlocked = graph.lock().await;
     graph_unlocked.add_node(
@@ -160,22 +169,46 @@ async fn get_counter_parties(
     // println!("Received from: {:?}", rec_from.len());
     // println!("Sent to: {:?}", sent_to.len());
     // TODO: add edges to graph
+    let mut new_nodes = vec![];
     for back_address in rec_from.clone() {
         println!("Edge: {} -> {}", back_address, address);
+        if !graph_unlocked.contains(&back_address) {
+            new_nodes.push(back_address);
+        }
     }
     for forward_address in sent_to.clone() {
         println!("Edge: {} -> {}", address, forward_address);
+        if !graph_unlocked.contains(&forward_address) {
+            new_nodes.push(forward_address);
+        }
     }
 
     // release the lock
     drop(graph_unlocked);
+    // load the new nodes
+    let labels = metadock_client::get_address_label(new_nodes.clone()).await?;
+    let mut i = 0;
     for back_address in rec_from {
         // graph_unlocked.add_edge(back_address, address);
-        get_counter_parties(back_address, etherscan_client, graph.clone()).await?;
+        get_counter_parties(
+            back_address,
+            labels[i].clone(),
+            etherscan_client,
+            graph.clone(),
+        )
+        .await?;
+        i += 1;
     }
     for forward_address in sent_to {
         // graph_unlocked.add_edge(forward_address, address);
-        get_counter_parties(forward_address, etherscan_client, graph.clone()).await?;
+        get_counter_parties(
+            forward_address,
+            labels[i].clone(),
+            etherscan_client,
+            graph.clone(),
+        )
+        .await?;
+        i += 1;
     }
     Ok(())
 }
