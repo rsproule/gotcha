@@ -82,30 +82,54 @@ async fn get_counter_parties(
     graph: Arc<Mutex<CounterPartyGraph>>,
 ) -> anyhow::Result<()> {
     let transactions = etherscan_client.get_transactions(&address, None).await?;
-    println!("Getting counterparties for: {}", address.to_string());
-    let mut graph_unlocked = graph.lock().await;
+    // println!("Getting counterparties for: {}", address.to_string());
+    let graph_unlocked = graph.lock().await;
 
     if graph_unlocked.contains(&address) {
-        println!("Seen this address before, returning");
+        // println!("Seen this address before, returning");
         return Ok(());
     }
+
+    // drop the lock while we are fetching data
+    drop(graph_unlocked);
 
     // check whats the deal with this address. Need to stop if it is a smart contract or an exchange
     let binding = etherscan_client.contract_source_code(address).await;
     let metadata = match binding {
         Ok(b) => Some(b),
-        Err(_) => None,
+        Err(e) => {
+            println!("Error getting contract metadata: {:?}", e);
+            None
+        }
     };
-    let label = metadock_client::get_address_label(address).await?;
+    // need to back off and retry for this, keep getting throttled 
+    let label = match metadock_client::get_address_label(address).await {
+        Ok(l) => l,
+        Err(e) => {
+            println!("Error getting address label: {:?}", e);
+            None
+        }
+    };
+
+    let mut graph_unlocked = graph.lock().await;
     graph_unlocked.add_node(
         address,
         label.clone(),
         metadata.clone(),
         transactions.clone(),
     );
+    // gonna use this as main output
+    println!(
+        "Node: {}-{}",
+        address,
+        match label.clone() {
+            Some(l) => l,
+            None => "".to_string(),
+        }
+    );
     if label.is_some() || (metadata.is_some() && metadata.unwrap().items.get(0).is_some()) {
-        println!("Found a label for this address, returning");
-        println!("Label: {:?}", label);
+        // println!("Found a label for this address, returning");
+        // println!("Label: {:?}", label);
         return Ok(());
     }
 
@@ -124,14 +148,26 @@ async fn get_counter_parties(
             Some(from) => from == &address,
             None => false,
         })
-        .map(|tx| tx.to.unwrap())
+        .map(|tx| match tx.to {
+            Some(to) => to,
+            None => {
+                println!("No to address");
+                H160::zero()
+            }
+        })
         .collect();
 
-    println!("Received from: {:?}", rec_from.len());
-    println!("Sent to: {:?}", sent_to.len());
+    // println!("Received from: {:?}", rec_from.len());
+    // println!("Sent to: {:?}", sent_to.len());
     // TODO: add edges to graph
+    for back_address in rec_from.clone() {
+        println!("Edge: {} -> {}", back_address, address);
+    }
+    for forward_address in sent_to.clone() {
+        println!("Edge: {} -> {}", address, forward_address);
+    }
 
-    // release the lock 
+    // release the lock
     drop(graph_unlocked);
     for back_address in rec_from {
         // graph_unlocked.add_edge(back_address, address);

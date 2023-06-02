@@ -13,8 +13,13 @@ pub async fn get_address_label(address: Address) -> anyhow::Result<Option<String
         .await?
         .json::<serde_json::Value>()
         .await?;
-    match resp[0]["label"].as_str() {
-        Some(label) => Ok(Some(label.to_string())),
-        None => Ok(None),
+    let opt = || -> Option<String> { Some(resp.get(0)?.get("label")?.as_str()?.to_string()) };
+
+    match opt() {
+        Some(label) => Ok(Some(label)),
+        None => {
+            println!("Failed to get label for address: {}", resp);
+            Ok(None)
+        }
     }
 }
