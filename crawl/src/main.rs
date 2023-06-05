@@ -19,6 +19,12 @@ struct Args {
 
     #[arg(short, long)]
     recursive_depth: Option<u32>,
+
+    #[arg(long)]
+    forward_only: Option<bool>,
+
+    #[arg(long)]
+    backward_only: Option<bool>,
 }
 
 #[tokio::main]
@@ -39,6 +45,8 @@ async fn main() -> anyhow::Result<()> {
         Arc::clone(&seen),
         0,
         max_depth,
+        args.forward_only.unwrap_or(false),
+        args.backward_only.unwrap_or(false),
     )
     .await?;
     Ok(())
@@ -52,6 +60,8 @@ async fn walk(
     seen: Arc<Mutex<Vec<Address>>>,
     current_depth: u32,
     max_depth: u32,
+    forward_only: bool,
+    backward_only: bool,
 ) -> anyhow::Result<()> {
     if current_depth > max_depth {
         println!("Reached max depth");
@@ -83,27 +93,30 @@ async fn walk(
 
     let mut new_nodes = vec![];
     let mut seen_unlocked = seen.lock().await;
-    for back_address in rec_from.clone() {
-        println!("Edge: {:?} -> {:?}", back_address, address);
-        if !seen_unlocked.contains(&back_address) {
-            new_nodes.push(back_address);
-            seen_unlocked.push(back_address);
+    if !forward_only {
+        for back_address in rec_from.clone() {
+            println!("Edge: {:?} -> {:?}", back_address, address);
+            if !seen_unlocked.contains(&back_address) {
+                new_nodes.push(back_address);
+                seen_unlocked.push(back_address);
+            }
         }
     }
-    for forward_address in sent_to.clone() {
-        println!("Edge: {:?} -> {:?}", address, forward_address);
-        if !seen_unlocked.contains(&forward_address) {
-            new_nodes.push(forward_address);
-            seen_unlocked.push(forward_address);
+    if !backward_only {
+        for forward_address in sent_to.clone() {
+            println!("Edge: {:?} -> {:?}", address, forward_address);
+            if !seen_unlocked.contains(&forward_address) {
+                new_nodes.push(forward_address);
+                seen_unlocked.push(forward_address);
+            }
         }
     }
     drop(seen_unlocked);
     let labelled_addresses = metadock_client::get_address_label(new_nodes.clone(), 1).await?;
     for (address, label) in labelled_addresses {
-        // gonna use this as main output
-
+        // TODO: this doesnt log smart contracts
         println!(
-            "Node: {:?}-{}",
+            "Node: id=[{:?}] label=[{}]",
             address,
             match label.clone() {
                 Some(l) => l,
@@ -111,12 +124,22 @@ async fn walk(
                     if current_depth == 0 {
                         "STARTER".to_string()
                     } else {
-                        let s = format!("{}[txns={:?}]", address, &transactions.len());
-                        s
+                        // this is horribly hacky, need to adjust this so we do the etherscan at same time as metadock
+                        let binding = etherscan_client.contract_source_code(address).await;
+                        if let Ok(metadata) = binding {
+                            let s =
+                                format!("{:?}_[{:?}]", address, metadata.items.get(0).unwrap().contract_name);
+                            s
+                        } else {
+                            let s =
+                                format!("UNLABELLED|{:?}|{:?}", address, &transactions.len());
+                            s
+                        }
                     }
                 }
             }
         );
+
         if label.is_none() && transactions.len() < FAN_OUT_LIMIT {
             walk(
                 address,
@@ -125,6 +148,8 @@ async fn walk(
                 Arc::clone(&seen),
                 current_depth + 1,
                 max_depth,
+                forward_only,
+                backward_only,
             )
             .await?;
         }

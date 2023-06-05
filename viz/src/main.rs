@@ -33,8 +33,10 @@ fn main() {
     for edge in edges {
         let n1 = g.node_indices().find(|i| g[*i].id == edge.source);
         let n2 = g.node_indices().find(|i| g[*i].id == edge.target);
-        if n1.is_some() && n2.is_some() {
-            g.add_edge(n1.unwrap(), n2.unwrap(), edge);
+        if let Some(n1) = n1 {
+            if let Some(n2) = n2 {
+                g.add_edge(n1, n2, edge);
+            }
         }
     }
     println!("{:?}", Dot::with_config(&g, &[Config::EdgeNoLabel]));
@@ -44,15 +46,21 @@ fn process_node_file(nodes_file: String) -> Vec<Node> {
     let mut nodes: Vec<Node> = Vec::new();
     for line in nodes_file.lines() {
         let id = line
-            .split('-')
-            .next()
-            .unwrap()
-            .to_string()
-            .split(' ')
+            .split("Node: id=[")
             .nth(1)
             .unwrap()
+            .split(']')
+            .next()
+            .unwrap()
             .to_string();
-        let label = line.split('-').nth(1).unwrap().to_string();
+        let label = line
+            .split(" label=[")
+            .nth(1)
+            .unwrap()
+            .split(']')
+            .next()
+            .unwrap()
+            .to_string();
         nodes.push(Node { id, label });
     }
     nodes
