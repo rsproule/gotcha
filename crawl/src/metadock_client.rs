@@ -19,7 +19,6 @@ pub async fn get_address_label(
         .await?
         .json::<serde_json::Value>()
         .await?;
-    let r2 = client.get()
     // println!("Response: {:?}", resp);
     let status = resp.get("code").and_then(|v| v.as_u64());
     let opt: Option<HashMap<Address, Option<String>>> = resp.as_array().map(|arr| {
