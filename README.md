@@ -1,10 +1,8 @@
-# Gotch
+# Gotcha
 
-A script for fetching all the counterparties to a given ethereum address. 
+A script for fetching all the counter-parties to a given ethereum address.
 
-Relies on 
+Relies on:
 
-- etherscan 
+- etherscan
 - metadock api
-
-
