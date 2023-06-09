@@ -1,0 +1,97 @@
+<head>
+    <style>
+        body {
+            margin: 0;
+        }
+    </style>
+
+    <script src="https://unpkg.com/3d-force-graph"></script>
+    <!--  <script src="../../dist/3d-force-graph.js"></script>-->
+</head>
+
+<body>
+
+    <div id="3d-graph"></div>
+
+    <script>
+        function getType(label) {
+            if (label === "STARTER") {
+                return 0;
+            }
+            if (label.includes("UNLABELLED")) {
+                return 1;
+            }
+            return 2;
+        }
+        function parseNode(node) {
+            const id = node.split("Node: id=[")[1].split(']')[0];
+            const label = node.split(" label=[")[1].split(']')[0];
+            const type = getType(label);
+            return { id, label, type }; 
+        }
+
+        function parseEdge(edge) {
+            const source = edge.split(" -> ")[0].split(' ')[1];
+            const target = edge.split(" -> ")[1].trim();
+            return { source, target };
+        }
+        const initData = {
+            nodes: [],
+            links: []
+        };
+        var unlinkedEdges = []
+
+        const elem = document.getElementById("3d-graph");
+
+        const Graph = ForceGraph3D()(elem)
+            .enableNodeDrag(false)
+            .nodeLabel(node => node.label)
+            .nodeAutoColorBy('type')
+            .linkDirectionalParticles(2)
+            .linkDirectionalParticleWidth(0.8)
+            .linkDirectionalParticleSpeed(0.006)
+            .graphData(initData);
+        var ws = new WebSocket("ws://localhost:1234");
+
+        ws.onmessage = function (evt) {
+            var received_msg = evt.data;
+
+            if (received_msg.includes("Node")) {
+                const node = parseNode(received_msg);
+                const { nodes, links } = Graph.graphData();
+                const newNodes = [...nodes, node]
+                const newLinks = unlinkedEdges.filter(edge => {
+                    const exists = newNodes.filter(node => node.id === edge.source).length !== 0
+                        && newNodes.filter(node => node.id === edge.target).length !== 0;
+                    if (exists) {
+                        let edgeIndex = unlinkedEdges.indexOf(edge);
+                        unlinkedEdges.splice(edgeIndex, 1);
+                    }
+                    return exists
+                })
+                Graph.graphData({
+                    nodes: newNodes,
+                    links: [...links, ...newLinks]
+                });
+
+            }
+            if (received_msg.includes("Edge")) {
+                const edge = parseEdge(received_msg);
+                const { nodes, links } = Graph.graphData();
+                const sourceExists = nodes.filter(node => node.id === edge.source).length !== 0;
+                const targetExists = nodes.filter(node => node.id === edge.target).length !== 0;
+                if (sourceExists && targetExists) {
+                    Graph.graphData({
+                        nodes: nodes,
+                        links: [...links, edge]
+                    });
+                } else {
+                    // dont add if its already in there 
+                    if (unlinkedEdges.filter(unlinkedEdge => unlinkedEdge.source === edge.source && unlinkedEdge.target === edge.target).length === 0) {
+                        unlinkedEdges.push(edge);
+                    }
+                }
+            }
+        };
+    </script>
+</body>
