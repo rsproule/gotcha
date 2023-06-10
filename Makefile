@@ -4,3 +4,8 @@ all:
 	grep -e Node: out/full.txt > out/nodes.txt
 	cargo run --bin viz -- --nodes-path out/nodes.txt --edges-path out/edges.txt > out/graph.dot 
 	dot -Tsvg out/graph.dot > out/graph.svg
+
+
+ws: 
+	websocat -t ws-l:127.0.0.1:1234 broadcast:mirror:
+

@@ -16,18 +16,18 @@
     <script>
         function getType(label) {
             if (label === "STARTER") {
-                return 0;
+                return 2;
             }
             if (label.includes("UNLABELLED")) {
                 return 1;
             }
-            return 2;
+            return 0;
         }
         function parseNode(node) {
             const id = node.split("Node: id=[")[1].split(']')[0];
             const label = node.split(" label=[")[1].split(']')[0];
             const type = getType(label);
-            return { id, label, type }; 
+            return { id, label, type };
         }
 
         function parseEdge(edge) {
@@ -45,6 +45,7 @@
 
         const Graph = ForceGraph3D()(elem)
             .enableNodeDrag(false)
+            .onNodeClick(node => navigator.clipboard.writeText(node.id))
             .nodeLabel(node => node.label)
             .nodeAutoColorBy('type')
             .linkDirectionalParticles(2)

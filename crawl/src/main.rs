@@ -37,9 +37,10 @@ async fn main() -> anyhow::Result<()> {
     let etherscan_client = Client::new_from_env(Chain::Mainnet)?;
     let seen = Arc::new(Mutex::new(Vec::<Address>::new()));
     // let local_label = label_client::get_address_labels(vec![address]).await?;
-    let binding = metadock_client::get_address_label(vec![address], 1).await?;
-    let label: Option<String> = binding.get(&address).and_then(|l| l.clone());
-    println!("Label: {:?}", label);
+    // let labelled_addresses = label_client::get_address_labels(new_nodes.clone()).await?;
+    // let binding = metadock_client::get_address_label(vec![address], 1).await?;
+    // let label: Option<String> = binding.get(&address).and_then(|l| l.clone());
+    // println!("Label: {:?}", label);
     walk(
         address,
         &None,
@@ -114,8 +115,8 @@ async fn walk(
         }
     }
     drop(seen_unlocked);
-    let local_label = label_client::get_address_labels(new_nodes.clone()).await?;
-    let labelled_addresses = metadock_client::get_address_label(new_nodes.clone(), 1).await?;
+    let labelled_addresses = label_client::get_address_labels(new_nodes.clone()).await?;
+    // let labelled_addresses = metadock_client::get_address_label(new_nodes.clone(), 1).await?;
     for (address, label) in labelled_addresses {
         // TODO: this doesnt log smart contracts
         println!(
