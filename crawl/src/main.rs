@@ -5,8 +5,8 @@ use clap::Parser;
 use ethers::prelude::*;
 use ethers_etherscan::{account::NormalTransaction, Client};
 use tokio::sync::Mutex;
-mod metadock_client;
 mod label_client;
+mod metadock_client;
 
 const FAN_OUT_LIMIT: usize = 500;
 #[derive(Parser, Debug)]
@@ -41,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
     // let binding = metadock_client::get_address_label(vec![address], 1).await?;
     // let label: Option<String> = binding.get(&address).and_then(|l| l.clone());
     // println!("Label: {:?}", label);
+    println!("Node: id=[{:?}] label=[{}]", address, "STARTER");
     walk(
         address,
         &None,
@@ -125,21 +126,23 @@ async fn walk(
             match label.clone() {
                 Some(l) => l,
                 None => {
-                    if current_depth == 0 {
-                        "STARTER".to_string()
+                    // if current_depth == 0 {
+                    //     "STARTER".to_string()
+                    // } else {
+                    // this is horribly hacky, need to adjust this so we do the etherscan at same time as metadock
+                    let binding = etherscan_client.contract_source_code(address).await;
+                    if let Ok(metadata) = binding {
+                        let s = format!(
+                            "{:?}_[{:?}]",
+                            address,
+                            metadata.items.get(0).unwrap().contract_name
+                        );
+                        s
                     } else {
-                        // this is horribly hacky, need to adjust this so we do the etherscan at same time as metadock
-                        let binding = etherscan_client.contract_source_code(address).await;
-                        if let Ok(metadata) = binding {
-                            let s =
-                                format!("{:?}_[{:?}]", address, metadata.items.get(0).unwrap().contract_name);
-                            s
-                        } else {
-                            let s =
-                                format!("UNLABELLED|{:?}|{:?}", address, &transactions.len());
-                            s
-                        }
+                        let s = format!("UNLABELLED|{:?}|{:?}", address, &transactions.len());
+                        s
                     }
+                    // }
                 }
             }
         );
