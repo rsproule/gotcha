@@ -6,6 +6,7 @@ use ethers::prelude::*;
 use ethers_etherscan::{account::NormalTransaction, Client};
 use tokio::sync::Mutex;
 mod label_client;
+mod label;
 mod metadock_client;
 
 const FAN_OUT_LIMIT: usize = 500;
@@ -36,11 +37,6 @@ async fn main() -> anyhow::Result<()> {
     println!("Running analysis for address: {}", address.to_string());
     let etherscan_client = Client::new_from_env(Chain::Mainnet)?;
     let seen = Arc::new(Mutex::new(Vec::<Address>::new()));
-    // let local_label = label_client::get_address_labels(vec![address]).await?;
-    // let labelled_addresses = label_client::get_address_labels(new_nodes.clone()).await?;
-    // let binding = metadock_client::get_address_label(vec![address], 1).await?;
-    // let label: Option<String> = binding.get(&address).and_then(|l| l.clone());
-    // println!("Label: {:?}", label);
     println!("Node: id=[{:?}] label=[{}]", address, "STARTER");
     walk(
         address,

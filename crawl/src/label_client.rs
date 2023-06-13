@@ -8,9 +8,6 @@ use crate::metadock_client;
 pub async fn get_address_labels(
     addresses: Vec<Address>,
 ) -> anyhow::Result<HashMap<Address, Option<String>>> {
-    // L2 cache, persistent disk cache
-    //
-
     let mut result = HashMap::new();
     let mut missed = Vec::new();
     for address in addresses {
@@ -38,39 +35,20 @@ async fn get_address_label(address: Address) -> anyhow::Result<String> {
 }
 
 fn store_batch(labelled_addresses: &HashMap<Address, Option<String>>) -> anyhow::Result<()> {
-    let mut cfg = Config::new("./cache/");
+    let cfg = Config::new("./cache/");
     let store = Store::new(cfg)?;
     let bucket = store.bucket::<String, String>(Some("labels"))?;
     for (address, label) in labelled_addresses {
-        // if let Some(label) = label {
         let default = format!("UNLABELLED|{:?}", address.to_string());
         let label = label.as_ref().unwrap_or(&default);
         bucket.set(&address.to_string(), label)?;
-        // }
     }
 
     Ok(())
 }
 
-fn store(address: Address, label: String) -> anyhow::Result<()> {
-    let mut cfg = Config::new("./cache/");
-
-    // Open the key/value store
-    let store = Store::new(cfg)?;
-
-    // A Bucket provides typed access to a section of the key/value store
-    let bucket = store.bucket::<String, String>(Some("labels"))?;
-
-    let key = address.to_string();
-    let value = label;
-
-    // Set test = 123
-    bucket.set(&key, &value)?;
-    Ok(())
-}
-
 fn fetch(address: Address) -> anyhow::Result<String> {
-    let mut cfg = Config::new("./cache/");
+    let cfg = Config::new("./cache/");
     let store = Store::new(cfg)?;
     let bucket = store.bucket::<String, String>(Some("labels"))?;
     bucket
