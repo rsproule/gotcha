@@ -6,29 +6,37 @@ use serde_json::Number;
 
 use super::Labeller;
 
-struct Metadock {
+pub struct Metadock {
     client: reqwest::Client,
     url: String,
     chain: String,
-    retries: u64,
+}
+
+impl Default for Metadock {
+    fn default() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            url: "https://extension.blocksec.com/api/v1/address-label".to_string(),
+            chain: "eth".to_string(),
+        }
+    }
 }
 
 #[async_trait]
 impl Labeller for Metadock {
-    async fn get_label(&self, address: Address) -> Option<String> {
-        let map = self.get_labels(vec![address]).await;
+    async fn get_label(&self, address: &Address) -> Option<String> {
+        let map = self.get_labels(&vec![*address]).await;
         map.get(&address).map(|s| s.to_string())
     }
 
-    async fn get_labels(&self, addresses: Vec<Address>) -> HashMap<Address, String> {
+    async fn get_labels(&self, addresses: &[Address]) -> HashMap<Address, String> {
         let res = Self::do_request(self, addresses).await;
         match res {
             Ok(map) => map,
             Err(e) => match e {
                 MetadockError::ResponseError(e) => {
                     if e.code.as_u64().unwrap() == 40000000 {
-                        println!("Got rate limit, retrying");
-                        // OperationResult::Retry("rate limit")
+                        println!("Got rate limit");
                     }
                     HashMap::new()
                 }
@@ -44,13 +52,12 @@ impl Labeller for Metadock {
 impl Metadock {
     async fn do_request(
         &self,
-        addresses: Vec<Address>,
+        addresses: &[Address],
     ) -> Result<HashMap<Address, String>, MetadockError> {
         let json = json!({
             "addresses": addresses,
             "chain": self.chain
         });
-
         match self
             .client
             .post(&self.url)
@@ -106,28 +113,4 @@ impl std::convert::From<MetadockResponseError> for MetadockError {
 pub enum MetadockError {
     ResponseError(MetadockResponseError),
     Unknown(String),
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_get_address_label() {
-        let addresses: Vec<Address> = vec!["0xb5d85cbf7cb3ee0d56b3bb207d5fc4b82f43f511"
-            .parse()
-            .unwrap()];
-
-        let metadock_client = Metadock {
-            client: reqwest::Client::new(),
-            url: "https://extension.blocksec.com/api/v1/address-label".to_string(),
-            chain: "eth".to_string(),
-            retries: 0,
-        };
-
-        // while true {
-        let lables = metadock_client.get_labels(addresses.clone()).await;
-        println!("Labels: {:?}", lables);
-        // }
-    }
 }

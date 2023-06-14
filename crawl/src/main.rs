@@ -4,10 +4,11 @@ use async_recursion::async_recursion;
 use clap::Parser;
 use ethers::prelude::*;
 use ethers_etherscan::{account::NormalTransaction, Client};
+use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-mod label_client;
+
+use crate::label::cache::LabelCache;
 mod label;
-mod metadock_client;
 
 const FAN_OUT_LIMIT: usize = 500;
 #[derive(Parser, Debug)]
@@ -27,26 +28,59 @@ struct Args {
 
     #[arg(long)]
     backward_only: Option<bool>,
+
+    #[arg(short, long)]
+    mode: Option<SearchMode>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+struct SearchSettings {
+    fan_out_limit: usize,
+    recursive_depth: u32,
+    forward_only: bool,
+    backward_only: bool,
+    mode: SearchMode,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+enum SearchMode {
+    DepthFirst,
+    BreadthFirst,
+}
+
+impl From<String> for SearchMode {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "depth-first" => SearchMode::DepthFirst,
+            "dfs" => SearchMode::DepthFirst,
+            "breadth-first" => SearchMode::BreadthFirst,
+            "bfs" => SearchMode::BreadthFirst,
+            _ => SearchMode::DepthFirst,
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let address: Address = args.address.parse()?;
-    let max_depth = args.recursive_depth.unwrap_or(5);
-    println!("Running analysis for address: {}", address.to_string());
     let etherscan_client = Client::new_from_env(Chain::Mainnet)?;
+    let label_cache_client = LabelCache::new();
     let seen = Arc::new(Mutex::new(Vec::<Address>::new()));
     println!("Node: id=[{:?}] label=[{}]", address, "STARTER");
     walk(
         address,
-        &None,
         &etherscan_client,
+        &label_cache_client,
         Arc::clone(&seen),
         0,
-        max_depth,
-        args.forward_only.unwrap_or(false),
-        args.backward_only.unwrap_or(false),
+        &SearchSettings {
+            fan_out_limit: args.fan_out_limit.unwrap_or(FAN_OUT_LIMIT),
+            recursive_depth: args.recursive_depth.unwrap_or(5),
+            forward_only: args.forward_only.unwrap_or(false),
+            backward_only: args.backward_only.unwrap_or(false),
+            mode: args.mode.unwrap_or(SearchMode::DepthFirst),
+        },
     )
     .await?;
     Ok(())
@@ -55,45 +89,22 @@ async fn main() -> anyhow::Result<()> {
 #[async_recursion]
 async fn walk(
     address: Address,
-    label: &Option<String>,
     etherscan_client: &Client,
+    label_cache_client: &LabelCache,
     seen: Arc<Mutex<Vec<Address>>>,
     current_depth: u32,
-    max_depth: u32,
-    forward_only: bool,
-    backward_only: bool,
+    settings: &SearchSettings,
 ) -> anyhow::Result<()> {
-    if current_depth > max_depth {
+    if current_depth > settings.recursive_depth {
         println!("Reached max depth");
         return Ok(());
     }
-    let transactions = etherscan_client
-        .get_transactions(&address, None)
-        .await
-        .map_err(|e| println!("Error getting transactions for {:?}: {:?}", address, e));
-    let transactions = match transactions {
-        Ok(t) => t,
-        Err(_) => return Ok(()),
-    };
-    // check whats the deal with this address. Need to stop if it is a smart contract or an exchange
-    let binding = etherscan_client.contract_source_code(address).await;
-    let metadata = match binding {
-        Ok(b) => Some(b),
-        Err(e) => {
-            println!("Error getting contract metadata: {:?}", e);
-            None
-        }
-    };
-
-    if label.is_some() || (metadata.is_some() && metadata.unwrap().items.get(0).is_some()) {
-        return Ok(());
-    }
-
+    // cache this?
+    let transactions = etherscan_client.get_transactions(&address, None).await?;
     let (rec_from, sent_to) = get_counter_parties(address, &transactions);
-
     let mut new_nodes = vec![];
     let mut seen_unlocked = seen.lock().await;
-    if !forward_only {
+    if !settings.forward_only {
         for back_address in rec_from.clone() {
             println!("Edge: {:?} -> {:?}", back_address, address);
             if !seen_unlocked.contains(&back_address) {
@@ -102,7 +113,7 @@ async fn walk(
             }
         }
     }
-    if !backward_only {
+    if !settings.backward_only {
         for forward_address in sent_to.clone() {
             println!("Edge: {:?} -> {:?}", address, forward_address);
             if !seen_unlocked.contains(&forward_address) {
@@ -112,49 +123,23 @@ async fn walk(
         }
     }
     drop(seen_unlocked);
-    let labelled_addresses = label_client::get_address_labels(new_nodes.clone()).await?;
-    // let labelled_addresses = metadock_client::get_address_label(new_nodes.clone(), 1).await?;
-    for (address, label) in labelled_addresses {
-        // TODO: this doesnt log smart contracts
-        println!(
-            "Node: id=[{:?}] label=[{}]",
-            address,
-            match label.clone() {
-                Some(l) => l,
-                None => {
-                    // if current_depth == 0 {
-                    //     "STARTER".to_string()
-                    // } else {
-                    // this is horribly hacky, need to adjust this so we do the etherscan at same time as metadock
-                    let binding = etherscan_client.contract_source_code(address).await;
-                    if let Ok(metadata) = binding {
-                        let s = format!(
-                            "{:?}_[{:?}]",
-                            address,
-                            metadata.items.get(0).unwrap().contract_name
-                        );
-                        s
-                    } else {
-                        let s = format!("UNLABELLED|{:?}|{:?}", address, &transactions.len());
-                        s
-                    }
-                    // }
-                }
+    let labelled_addresses = label_cache_client.get_labels(new_nodes.clone()).await;
+    for node in new_nodes {
+        let label = labelled_addresses.get(&node);
+        match label {
+            Some(label) => println!("Node: id=[{:?}] label=[{}]", node, label),
+            None => {
+                println!("Node: id=[{:?}] label=[UNLABELLED]", node);
+                walk(
+                    node,
+                    etherscan_client,
+                    label_cache_client,
+                    Arc::clone(&seen),
+                    current_depth + 1,
+                    settings,
+                )
+                .await?;
             }
-        );
-
-        if label.is_none() && transactions.len() < FAN_OUT_LIMIT {
-            walk(
-                address,
-                &label,
-                etherscan_client,
-                Arc::clone(&seen),
-                current_depth + 1,
-                max_depth,
-                forward_only,
-                backward_only,
-            )
-            .await?;
         }
     }
     Ok(())
@@ -188,4 +173,18 @@ fn get_counter_parties(
         })
         .collect();
     (rec_from, sent_to)
+}
+
+#[derive(Debug, Serialize)]
+struct Node {
+    address: Address,
+    label: String,
+}
+
+#[derive(Debug, Serialize)]
+struct Edge {
+    tx: Transaction,
+    from: Address,
+    to: Address,
+    amount: U256,
 }
