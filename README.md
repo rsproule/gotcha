@@ -23,7 +23,7 @@ git clone git@github.com:rsproule/gotcha.git
 
 Some pre-requisites to get the visualization working:
 
-- need to run a local websocket server for the frontend to recieve messages
+- need to run a local websocket server for the frontend to receive messages
   - I use websocat: <https://github.com/vi/websocat>
   - `brew install websocat`
 
@@ -65,3 +65,7 @@ Crawler features:
 - [ ] logging (debug stuff separate from critical output, stdout)
 - [ ] serialize the node, like we are doing with edges (simplifies the frontend)
 - [ ] alternate search modes (dfs, bfs, etc)
+
+CI/CD:
+
+- [ ] add github action to build + run some tests
