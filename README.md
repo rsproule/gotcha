@@ -1,5 +1,9 @@
 # Gotcha
 
+<p align="center">
+  <img width="1000" src="graph-demo.gif">
+</p>
+
 A script for fetching all the counter-parties to a given ethereum address.
 
 Relies on:
