@@ -31,9 +31,16 @@
         }
 
         function parseEdge(edge) {
-            const source = edge.split(" -> ")[0].split(' ')[1];
-            const target = edge.split(" -> ")[1].trim();
-            return { source, target };
+            const jsonString = edge.split("Edge:")[1].trim();
+
+            try {
+
+                JSON.parse(jsonString);
+            } catch (e) {
+                console.log("error parsing edge", jsonString);
+            }
+            const json = JSON.parse(jsonString);
+            return { source: json.to, target: json.from, txs: json.txs };
         }
         const initData = {
             nodes: [],
@@ -88,7 +95,8 @@
                     });
                 } else {
                     // dont add if its already in there 
-                    if (unlinkedEdges.filter(unlinkedEdge => unlinkedEdge.source === edge.source && unlinkedEdge.target === edge.target).length === 0) {
+                    if (unlinkedEdges.filter(unlinkedEdge => unlinkedEdge.source === edge.source
+                        && unlinkedEdge.target === edge.target).length === 0) {
                         unlinkedEdges.push(edge);
                     }
                 }
