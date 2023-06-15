@@ -7,12 +7,45 @@ Relies on:
 - etherscan
 - metadock api
 
+## Usage
+
+Clone the repo:
+
+```bash
+git clone git@github.com:rsproule/gotcha.git
+```
+
+Some pre-requisites to get the visualization working:
+
+- need to run a local websocket server for the frontend to recieve messages
+  - I use websocat: <https://github.com/vi/websocat>
+  - `brew install websocat`
+
+Launch the websocket server:
+
+```bash
+make ws-server
+```
+
+Open the frontend in browser:
+
+```bash
+open graph.html
+```
+
+Run the crawler script and pipe the output to the websocket server:
+
+```bash
+cargo run --bin crawl -- --address <address> | websocat ws://localhost:1234
+```
+
 ----
 
 ## TODO
 
-- [ ] bypass metadock rate limiting by spoofing the ip. (pretty sure they are just using the ip to rate limit)
+Frontend explorer features:
+
 - [ ] highlight the path back to the origin address on hover. give ability to export.
 - [ ] give a way to export the graph with sharable bundle (just export the graph data object to json).
 - [ ] add a way to search the graph for a given address. Highlight that node
-- [ ] add a way to add custom labels, with custom colors etc 
+- [ ] add a way to add custom labels, with custom colors etc

@@ -26,14 +26,12 @@
             const id = node.split("Node: id=[")[1].split(']')[0];
             const label = node.split(" label=[")[1].split(']')[0];
             const type = getType(label);
-            // console.log("new node")
             return { id, label, type };
         }
 
         function parseEdge(edge) {
             const jsonString = edge.split("Edge:")[1].trim();
             const json = JSON.parse(jsonString);
-            // console.log("new edge")
             return { source: json.to, target: json.from, txs: json.txs };
         }
         const initData = {
@@ -61,7 +59,6 @@
             if (received_msg.includes("Node")) {
                 const node = parseNode(received_msg);
                 const { nodes, links } = Graph.graphData();
-                // console.log("total nodes: " + nodes.length)
                 const newNodes = [...nodes, node]
                 const newLinks = unlinkedEdges.filter(edge => {
                     const exists = newNodes.filter(node => node.id === edge.source).length !== 0
@@ -84,7 +81,6 @@
                 const sourceExists = nodes.filter(node => node.id === edge.source).length !== 0;
                 const targetExists = nodes.filter(node => node.id === edge.target).length !== 0;
                 if (sourceExists && targetExists) {
-                    console.log("ADdding edge: ", links.length)
                     Graph.graphData({
                         nodes: nodes,
                         links: [...links, edge]

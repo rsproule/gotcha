@@ -1,11 +1,9 @@
-all: 
-	cargo run --bin crawl -- --address 0xABc0948e1551c52C7D0Cfc7b9FB2f95a8B2CCF10 --recursive-depth 3 --backward-only true > out/full.txt
-	grep -e Edge: out/full.txt > out/edges.txt
-	grep -e Node: out/full.txt > out/nodes.txt
-	cargo run --bin viz -- --nodes-path out/nodes.txt --edges-path out/edges.txt > out/graph.dot 
-	dot -Tsvg out/graph.dot > out/graph.svg
-
-
-ws: 
+ws-serve: 
 	websocat -t ws-l:127.0.0.1:1234 broadcast:mirror:
+
+example: 
+	cargo run --bin crawl -- --address 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045  \
+		--recursive-depth 2 \
+		--backward false \
+		| websocat ws://127.0.0.1:1234
 

@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
         "Node: id=[{:?}] label=[{}:{}] depth=[0]",
         address,
         "STARTER",
-        label.unwrap_or("".to_string())
+        label.unwrap_or("NO-LABEL".to_string())
     );
     let mut l = seen.lock().await;
     l.push(address);

@@ -81,19 +81,20 @@ impl Metadock {
     }
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum MetadockResponse {
     Success(Vec<MetadockResponseData>),
     Error(MetadockResponseError),
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize)]
 struct MetadockResponseData {
     pub address: String,
     pub label: String,
-    pub logo: String,
-    pub risk: Number,
+    // These are here but i don't use them
+    // pub logo: String,
+    // pub risk: Number,
 }
 #[derive(serde::Deserialize, Debug)]
 pub struct MetadockResponseError {

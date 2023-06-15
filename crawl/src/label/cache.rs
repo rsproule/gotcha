@@ -46,10 +46,7 @@ impl LabelCache<'_> {
 
     pub async fn get_label(&self, address: Address) -> Option<String> {
         let res = self.get_labels(vec![address]).await;
-        match res.get(&address) {
-            Some(label) => Some(label.to_string()),
-            None => None,
-        }
+        res.get(&address).map(|label| label.to_string())
     }
 
     pub async fn get_labels(&self, addresses: Vec<Address>) -> HashMap<Address, String> {
@@ -60,7 +57,8 @@ impl LabelCache<'_> {
             let label = self.get(cache_key).await;
             match label {
                 Some(label) => {
-                    // TODO: This is a hack to avoid the "UNLABELLED" label
+                    // TODO: This is a hack to avoid the "UNLABELLED" label,
+                    // probably pointless check unless we are negative caching
                     if label != "UNLABELLED" {
                         println!("Cache hit: {}", label);
                         result.insert(address, label);
@@ -71,7 +69,7 @@ impl LabelCache<'_> {
         }
 
         if !missed.is_empty() {
-            // HACK: chop to the first 100 or just the length
+            // HACK: chop to the first 100 
             let chopped_missed = if missed.len() > 50 {
                 missed.clone()[0..50].to_vec()
             } else {
@@ -82,12 +80,13 @@ impl LabelCache<'_> {
                 let labelled_addresses = fetcher.get_labels(&chopped_missed).await;
                 for (k, v) in &labelled_addresses {
                     let cache_key = format!("{:#?}", k);
-                    // NOTE: This does not do any negative caching, which we probably want to do.
                     self.set(cache_key, v.to_string()).await;
                 }
                 result.extend(labelled_addresses);
             }
-            // negative cache. problem is this cache key does not check per fetcher
+            // TODO: i have comment out the negative cache. problem is this cache
+            // key does not check per fetcher.  For stuff that is not labelled by
+            // any fetcher, we should cache that it is unlabelled
             // for address in missed {
             //     let cache_key = format!("{:#?}", address);
             //     // i dont really like this string, but it's better than nothing

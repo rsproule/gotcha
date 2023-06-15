@@ -26,7 +26,7 @@ impl Labeller for Etherscan {
         match metadata {
             Ok(m) => Some(metadata_to_label(m)),
             Err(e) => {
-                println!("Etherscan error: {:?}", e);
+                println!("Etherscan error for {}: {:?}", address, e);
                 None
             }
         }
