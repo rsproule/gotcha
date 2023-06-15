@@ -6,7 +6,6 @@
     </style>
 
     <script src="https://unpkg.com/3d-force-graph"></script>
-    <!--  <script src="../../dist/3d-force-graph.js"></script>-->
 </head>
 
 <body>
@@ -32,13 +31,6 @@
 
         function parseEdge(edge) {
             const jsonString = edge.split("Edge:")[1].trim();
-
-            try {
-
-                JSON.parse(jsonString);
-            } catch (e) {
-                console.log("error parsing edge", jsonString);
-            }
             const json = JSON.parse(jsonString);
             return { source: json.to, target: json.from, txs: json.txs };
         }
