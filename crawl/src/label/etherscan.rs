@@ -22,7 +22,6 @@ impl Default for Etherscan {
 #[async_trait]
 impl Labeller for Etherscan {
     async fn get_label(&self, address: &Address) -> Option<String> {
-        // 
         let metadata = self.client.contract_source_code(*address).await;
         match metadata {
             Ok(m) => Some(metadata_to_label(m)),
@@ -49,6 +48,5 @@ fn metadata_to_label(metadata: ContractMetadata) -> String {
     for item in metadata.items {
         s.push_str(&item.contract_name);
     }
-    // println!("Etherscan contract label: {}", s);
     s
 }

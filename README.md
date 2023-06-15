@@ -4,12 +4,14 @@
   <img width="1000" src="graph-demo.gif">
 </p>
 
-A script for fetching all the counter-parties to a given ethereum address.
+Gotcha is a tool to visualize the flow of funds and interactions between accounts on Ethereum.
+The rust based cli allows for customizable crawling of the chain and outputs the data in a format
+that the simple frontend can consume to render the graph.
 
 Relies on:
 
-- etherscan
-- metadock api
+- etherscan: contract labels, address counter-party info
+- metadock api: address labels
 
 ## Usage
 
@@ -57,3 +59,9 @@ Frontend explorer features:
 - [ ] give a way to export the graph with sharable bundle (just export the graph data object to json).
 - [ ] add a way to search the graph for a given address. Highlight that node
 - [ ] add a way to add custom labels, with custom colors etc
+
+Crawler features:
+
+- [ ] logging (debug stuff separate from critical output, stdout)
+- [ ] serialize the node, like we are doing with edges (simplifies the frontend)
+- [ ] alternate search modes (dfs, bfs, etc)
