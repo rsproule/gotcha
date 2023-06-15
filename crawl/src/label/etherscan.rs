@@ -22,11 +22,12 @@ impl Default for Etherscan {
 #[async_trait]
 impl Labeller for Etherscan {
     async fn get_label(&self, address: &Address) -> Option<String> {
+        // 
         let metadata = self.client.contract_source_code(*address).await;
         match metadata {
             Ok(m) => Some(metadata_to_label(m)),
             Err(e) => {
-                println!("Etherscan error for {}: {:?}", address, e);
+                println!("Etherscan error for {:?}: {:?}", address, e);
                 None
             }
         }

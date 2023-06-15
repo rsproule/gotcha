@@ -40,8 +40,11 @@ open graph.html
 Run the crawler script and pipe the output to the websocket server:
 
 ```bash
-export ETHERSCAN_API_KEY=<your etherscan api key> // since we rely on ol etherscan for labels and some other shit 
-cargo run --bin crawl -- --address <address> | websocat ws://localhost:1234
+export ETHERSCAN_API_KEY=<your etherscan api key> 
+cargo run --bin crawl -- --address <insert an address> | websocat ws://localhost:1234
+
+# more parameters are available 
+cargo run --bin crawl -- --help
 ```
 
 ----

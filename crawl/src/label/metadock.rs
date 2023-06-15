@@ -38,11 +38,11 @@ impl Labeller for Metadock {
                     // if e.code.as_u64().unwrap() == 40000000 {
                     //     println!("Got rate limit");
                     // }
-                    println!("Metadock error: {:?}", e);
+                    println!("Metadock Response error: {:?} on {:?}", e, addresses);
                     HashMap::new()
                 }
                 MetadockError::Unknown(e) => {
-                    println!("Internal Metadock error: {:?}", e);
+                    println!("Internal Metadock error: {:?} on {:?}", e, addresses);
                     HashMap::new()
                 }
             },
