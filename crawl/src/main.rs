@@ -4,7 +4,7 @@ use async_recursion::async_recursion;
 use clap::Parser;
 use ethers::prelude::*;
 use search::{Crawler, DirectedEdges};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::sync::Mutex;
 
 use crate::{
@@ -71,7 +71,16 @@ async fn main() -> anyhow::Result<()> {
     let label_cache_client = LabelCache::new();
     let etherscan_crawler = EtherscanCrawler::default();
     let seen = Arc::new(Mutex::new(Vec::<Address>::new()));
-    println!("Node: id=[{:?}] label=[{}]", address, "STARTER");
+    let label = label_cache_client.get_label(address).await;
+    println!(
+        "Node: id=[{:?}] label=[{}:{}] depth=[0]",
+        address,
+        "STARTER",
+        label.unwrap_or("".to_string())
+    );
+    let mut l = seen.lock().await;
+    l.push(address);
+    drop(l);
     walk(
         address,
         &etherscan_crawler,
@@ -80,7 +89,7 @@ async fn main() -> anyhow::Result<()> {
         0,
         &SearchSettings {
             fan_out_limit: args.fan_out_limit.unwrap_or(FAN_OUT_LIMIT),
-            recursive_depth: args.recursive_depth.unwrap_or(5),
+            recursive_depth: args.recursive_depth.unwrap_or(2),
             forward: args.forward.unwrap_or(true),
             backward: args.backward.unwrap_or(true),
             mode: args.mode.unwrap_or(SearchMode::DepthFirst),
@@ -97,9 +106,10 @@ async fn walk(
     etherscan_crawler: &EtherscanCrawler,
     label_cache_client: &LabelCache,
     seen: Arc<Mutex<Vec<Address>>>,
-    current_depth: u32,
+    mut current_depth: u32,
     settings: &SearchSettings,
 ) -> anyhow::Result<()> {
+    current_depth += 1;
     if current_depth > settings.recursive_depth {
         println!("Reached max depth");
         return Ok(());
@@ -132,15 +142,21 @@ async fn walk(
     for node in new_nodes {
         let label = labelled_addresses.get(&node);
         match label {
-            Some(label) => println!("Node: id=[{:?}] label=[{}]", node, label),
+            Some(label) => println!(
+                "Node: id=[{:?}] label=[{}] depth=[{}]",
+                node, label, current_depth
+            ),
             None => {
-                println!("Node: id=[{:?}] label=[UNLABELLED]", node);
+                println!(
+                    "Node: id=[{:?}] label=[UNLABELLED] depth=[{}]",
+                    node, current_depth
+                );
                 walk(
                     node,
                     etherscan_crawler,
                     label_cache_client,
                     Arc::clone(&seen),
-                    current_depth + 1,
+                    current_depth,
                     settings,
                 )
                 .await?;

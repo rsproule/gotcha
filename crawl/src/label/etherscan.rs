@@ -48,6 +48,6 @@ fn metadata_to_label(metadata: ContractMetadata) -> String {
     for item in metadata.items {
         s.push_str(&item.contract_name);
     }
-    println!("Etherscan contract label: {}", s);
+    // println!("Etherscan contract label: {}", s);
     s
 }

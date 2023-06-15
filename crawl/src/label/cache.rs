@@ -44,6 +44,14 @@ impl LabelCache<'_> {
         }
     }
 
+    pub async fn get_label(&self, address: Address) -> Option<String> {
+        let res = self.get_labels(vec![address]).await;
+        match res.get(&address) {
+            Some(label) => Some(label.to_string()),
+            None => None,
+        }
+    }
+
     pub async fn get_labels(&self, addresses: Vec<Address>) -> HashMap<Address, String> {
         let mut result = HashMap::new();
         let mut missed = Vec::new();
