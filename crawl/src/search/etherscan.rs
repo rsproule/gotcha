@@ -28,7 +28,7 @@ impl Crawler for EtherscanCrawler {
         match transactions {
             Ok(t) => get_counter_parties(address, t),
             Err(e) => {
-                println!("Etherscan crawler error for {}: {:?}", address, e);
+                println!("Etherscan crawler error for {:?}: {:?}", address, e);
                 vec![]
             }
         }

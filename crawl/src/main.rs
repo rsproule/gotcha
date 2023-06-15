@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use clap::Parser;
 use ethers::prelude::*;
-use search::{Crawler, DirectedEdges};
+use search::DirectedEdges;
 use serde::Deserialize;
 use tokio::sync::Mutex;
 
