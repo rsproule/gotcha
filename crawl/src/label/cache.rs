@@ -52,21 +52,39 @@ impl LabelCache<'_> {
             let label = self.get(cache_key).await;
             match label {
                 Some(label) => {
-                    result.insert(address, label);
+                    // TODO: This is a hack to avoid the "UNLABELLED" label
+                    if label != "UNLABELLED" {
+                        println!("Cache hit: {}", label);
+                        result.insert(address, label);
+                    }
                 }
                 None => missed.push(address),
             }
         }
 
         if !missed.is_empty() {
+            // HACK: chop to the first 100 or just the length
+            let chopped_missed = if missed.len() > 50 {
+                missed.clone()[0..50].to_vec()
+            } else {
+                missed.clone()
+            };
+            println!("Fetching {} labels from the network", chopped_missed.len());
             for fetcher in self.fetchers.iter() {
-                let labelled_addresses = fetcher.get_labels(&missed).await;
+                let labelled_addresses = fetcher.get_labels(&chopped_missed).await;
                 for (k, v) in &labelled_addresses {
                     let cache_key = format!("{:#?}", k);
+                    // NOTE: This does not do any negative caching, which we probably want to do.
                     self.set(cache_key, v.to_string()).await;
                 }
                 result.extend(labelled_addresses);
             }
+            // negative cache. problem is this cache key does not check per fetcher
+            // for address in missed {
+            //     let cache_key = format!("{:#?}", address);
+            //     // i dont really like this string, but it's better than nothing
+            //     self.set(cache_key, "UNLABELLED".to_string()).await;
+            // }
         }
         result
     }

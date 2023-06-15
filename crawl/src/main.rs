@@ -3,12 +3,16 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use clap::Parser;
 use ethers::prelude::*;
-use ethers_etherscan::{account::NormalTransaction, Client};
+use search::{Crawler, DirectedEdges};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use crate::label::cache::LabelCache;
+use crate::{
+    label::cache::LabelCache,
+    search::{etherscan::EtherscanCrawler, SimpleEdges},
+};
 mod label;
+mod search;
 
 const FAN_OUT_LIMIT: usize = 500;
 #[derive(Parser, Debug)]
@@ -24,10 +28,10 @@ struct Args {
     recursive_depth: Option<u32>,
 
     #[arg(long)]
-    forward_only: Option<bool>,
+    forward: Option<bool>,
 
     #[arg(long)]
-    backward_only: Option<bool>,
+    backward: Option<bool>,
 
     #[arg(short, long)]
     mode: Option<SearchMode>,
@@ -37,8 +41,8 @@ struct Args {
 struct SearchSettings {
     fan_out_limit: usize,
     recursive_depth: u32,
-    forward_only: bool,
-    backward_only: bool,
+    forward: bool,
+    backward: bool,
     mode: SearchMode,
 }
 
@@ -64,32 +68,33 @@ impl From<String> for SearchMode {
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let address: Address = args.address.parse()?;
-    let etherscan_client = Client::new_from_env(Chain::Mainnet)?;
     let label_cache_client = LabelCache::new();
+    let etherscan_crawler = EtherscanCrawler::default();
     let seen = Arc::new(Mutex::new(Vec::<Address>::new()));
     println!("Node: id=[{:?}] label=[{}]", address, "STARTER");
     walk(
         address,
-        &etherscan_client,
+        &etherscan_crawler,
         &label_cache_client,
         Arc::clone(&seen),
         0,
         &SearchSettings {
             fan_out_limit: args.fan_out_limit.unwrap_or(FAN_OUT_LIMIT),
             recursive_depth: args.recursive_depth.unwrap_or(5),
-            forward_only: args.forward_only.unwrap_or(false),
-            backward_only: args.backward_only.unwrap_or(false),
+            forward: args.forward.unwrap_or(true),
+            backward: args.backward.unwrap_or(true),
             mode: args.mode.unwrap_or(SearchMode::DepthFirst),
         },
     )
     .await?;
+    println!("Done!");
     Ok(())
 }
 
 #[async_recursion]
 async fn walk(
     address: Address,
-    etherscan_client: &Client,
+    etherscan_crawler: &EtherscanCrawler,
     label_cache_client: &LabelCache,
     seen: Arc<Mutex<Vec<Address>>>,
     current_depth: u32,
@@ -99,26 +104,26 @@ async fn walk(
         println!("Reached max depth");
         return Ok(());
     }
-    // cache this?
-    let transactions = etherscan_client.get_transactions(&address, None).await?;
-    let (rec_from, sent_to) = get_counter_parties(address, &transactions);
+    let neighbor_edges = etherscan_crawler.get_edges(&address).await;
     let mut new_nodes = vec![];
     let mut seen_unlocked = seen.lock().await;
-    if !settings.forward_only {
-        for back_address in rec_from.clone() {
-            println!("Edge: {:?} -> {:?}", back_address, address);
-            if !seen_unlocked.contains(&back_address) {
-                new_nodes.push(back_address);
-                seen_unlocked.push(back_address);
+    for edge in neighbor_edges {
+        match edge {
+            DirectedEdges::Forward(edge) => {
+                if settings.forward && !seen_unlocked.contains(&edge.to) {
+                    new_nodes.push(edge.to);
+                    seen_unlocked.push(edge.to);
+                }
+                let simple_edge: SimpleEdges = edge.into();
+                println!("Edge:{}", serde_json::to_string(&simple_edge)?);
             }
-        }
-    }
-    if !settings.backward_only {
-        for forward_address in sent_to.clone() {
-            println!("Edge: {:?} -> {:?}", address, forward_address);
-            if !seen_unlocked.contains(&forward_address) {
-                new_nodes.push(forward_address);
-                seen_unlocked.push(forward_address);
+            DirectedEdges::Backward(edge) => {
+                if settings.backward && !seen_unlocked.contains(&edge.from) {
+                    new_nodes.push(edge.from);
+                    seen_unlocked.push(edge.from);
+                }
+                let simple_edge: SimpleEdges = edge.into();
+                println!("Edge:{}", serde_json::to_string(&simple_edge)?);
             }
         }
     }
@@ -132,7 +137,7 @@ async fn walk(
                 println!("Node: id=[{:?}] label=[UNLABELLED]", node);
                 walk(
                     node,
-                    etherscan_client,
+                    etherscan_crawler,
                     label_cache_client,
                     Arc::clone(&seen),
                     current_depth + 1,
@@ -143,48 +148,4 @@ async fn walk(
         }
     }
     Ok(())
-}
-
-fn get_counter_parties(
-    address: Address,
-    transactions: &[NormalTransaction],
-) -> (Vec<Address>, Vec<Address>) {
-    let rec_from: Vec<H160> = transactions
-        .iter()
-        .filter(|tx| match tx.to {
-            Some(to) => to == address,
-            None => false,
-        })
-        .map(|tx| *tx.from.value().unwrap())
-        .collect();
-
-    let sent_to: Vec<Address> = transactions
-        .iter()
-        .filter(|tx| match tx.from.value() {
-            Some(from) => from == &address,
-            None => false,
-        })
-        .map(|tx| match tx.to {
-            Some(to) => to,
-            None => {
-                println!("No to address");
-                H160::zero()
-            }
-        })
-        .collect();
-    (rec_from, sent_to)
-}
-
-#[derive(Debug, Serialize)]
-struct Node {
-    address: Address,
-    label: String,
-}
-
-#[derive(Debug, Serialize)]
-struct Edge {
-    tx: Transaction,
-    from: Address,
-    to: Address,
-    amount: U256,
 }

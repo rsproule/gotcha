@@ -25,8 +25,8 @@ impl Default for Metadock {
 #[async_trait]
 impl Labeller for Metadock {
     async fn get_label(&self, address: &Address) -> Option<String> {
-        let map = self.get_labels(&vec![*address]).await;
-        map.get(&address).map(|s| s.to_string())
+        let map = self.get_labels(&[*address]).await;
+        map.get(address).map(|s| s.to_string())
     }
 
     async fn get_labels(&self, addresses: &[Address]) -> HashMap<Address, String> {
@@ -35,9 +35,10 @@ impl Labeller for Metadock {
             Ok(map) => map,
             Err(e) => match e {
                 MetadockError::ResponseError(e) => {
-                    if e.code.as_u64().unwrap() == 40000000 {
-                        println!("Got rate limit");
-                    }
+                    // if e.code.as_u64().unwrap() == 40000000 {
+                    //     println!("Got rate limit");
+                    // }
+                    println!("Metadock error: {:?}", e);
                     HashMap::new()
                 }
                 MetadockError::Unknown(e) => {

@@ -25,7 +25,10 @@ impl Labeller for Etherscan {
         let metadata = self.client.contract_source_code(*address).await;
         match metadata {
             Ok(m) => Some(metadata_to_label(m)),
-            Err(_) => None,
+            Err(e) => {
+                println!("Etherscan error: {:?}", e);
+                None
+            }
         }
     }
 
