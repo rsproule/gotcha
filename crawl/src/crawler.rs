@@ -4,8 +4,11 @@ use async_recursion::async_recursion;
 use ethers::types::Address;
 use tokio::sync::Mutex;
 
-use crate::{search::{etherscan::EtherscanCrawler, Crawler, DirectedEdges, SimpleEdges}, label::cache::LabelCache, SearchSettings};
-
+use crate::{
+    label::cache::LabelCache,
+    search::{etherscan::EtherscanCrawler, Crawler, DirectedEdges, SimpleEdges},
+    SearchSettings,
+};
 
 #[async_recursion]
 pub async fn crawl(
@@ -45,8 +48,15 @@ pub async fn crawl(
         }
     }
     drop(seen_unlocked);
-    let labelled_addresses = label_cache_client.get_labels(new_nodes.clone()).await;
-    for node in new_nodes {
+    let limited_new_nodes = if new_nodes.len() > settings.fan_out_limit {
+        new_nodes.clone()[0..settings.fan_out_limit].to_vec()
+    } else {
+        new_nodes.clone()
+    };
+    let labelled_addresses = label_cache_client
+        .get_labels(limited_new_nodes.clone()) // gross clone
+        .await;
+    for node in limited_new_nodes {
         let label = labelled_addresses.get(&node);
         match label {
             Some(label) => println!(

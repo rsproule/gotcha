@@ -26,7 +26,8 @@
             const id = node.split("Node: id=[")[1].split(']')[0];
             const label = node.split(" label=[")[1].split(']')[0];
             const type = getType(label);
-            return { id, label, type };
+            const depth = node.split(" depth=[")[1].split(']')[0];
+            return { id, label, type, depth };
         }
 
         function parseEdge(edge) {
@@ -46,7 +47,8 @@
             .enableNodeDrag(false)
             .onNodeClick(node => navigator.clipboard.writeText(node.id))
             .nodeLabel(node => node.label)
-            .nodeAutoColorBy('type')
+            // .nodeAutoColorBy('type')
+            .nodeAutoColorBy('depth')
             .linkDirectionalParticles(2)
             .linkDirectionalParticleWidth(0.8)
             .linkDirectionalParticleSpeed(0.006)

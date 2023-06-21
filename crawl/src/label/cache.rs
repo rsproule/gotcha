@@ -3,28 +3,25 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use ethers::types::Address;
 use kv::{Bucket, Config, Store};
-use tokio::sync::Mutex;
 
 use super::{etherscan::Etherscan, metadock::Metadock, Cache, Labeller};
 
 pub struct LabelCache<'a> {
-    bucket: Arc<Mutex<Bucket<'a, String, String>>>,
+    bucket: Arc<Bucket<'a, String, String>>,
     fetchers: Vec<Box<dyn Labeller + Send + Sync>>,
 }
 
 #[async_trait]
 impl Cache<String, String> for LabelCache<'_> {
     async fn get(&self, key: String) -> Option<String> {
-        let bucket = self.bucket.lock().await;
-        match bucket.get(&key) {
+        match self.bucket.get(&key) {
             Ok(value) => value,
             Err(_) => None,
         }
     }
 
     async fn set(&self, key: String, value: String) -> Option<String> {
-        let bucket = self.bucket.lock().await;
-        match bucket.set(&key, &value) {
+        match self.bucket.set(&key, &value) {
             Ok(value) => value,
             Err(_) => None,
         }
@@ -35,9 +32,7 @@ impl LabelCache<'_> {
     pub fn new() -> Self {
         let cfg = Config::new("./cache/");
         let store = Store::new(cfg).unwrap();
-        let bucket = Arc::new(Mutex::new(
-            store.bucket::<String, String>(Some("labels")).unwrap(),
-        ));
+        let bucket = Arc::new(store.bucket::<String, String>(Some("labels")).unwrap());
         LabelCache {
             bucket: Arc::clone(&bucket),
             fetchers: vec![Box::<Metadock>::default(), Box::<Etherscan>::default()],
@@ -69,15 +64,9 @@ impl LabelCache<'_> {
         }
 
         if !missed.is_empty() {
-            // HACK: chop to the first 100 
-            let chopped_missed = if missed.len() > 50 {
-                missed.clone()[0..50].to_vec()
-            } else {
-                missed.clone()
-            };
-            println!("Fetching {} labels from the network", chopped_missed.len());
+            println!("Fetching {} labels from the network", missed.len());
             for fetcher in self.fetchers.iter() {
-                let labelled_addresses = fetcher.get_labels(&chopped_missed).await;
+                let labelled_addresses = fetcher.get_labels(&missed).await;
                 for (k, v) in &labelled_addresses {
                     let cache_key = format!("{:#?}", k);
                     self.set(cache_key, v.to_string()).await;
