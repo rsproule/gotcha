@@ -10,7 +10,7 @@ mod crawler;
 mod label;
 mod search;
 
-const FAN_OUT_LIMIT: usize = 500;
+const FAN_OUT_LIMIT: usize = 50;
 const RECURSIVE_DEPTH: usize = 3;
 const ENABLE_FORWARD: bool = true;
 const ENABLE_BACKWARD: bool = true;
