@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
-use async_recursion::async_recursion;
 use clap::Parser;
 use ethers::prelude::*;
-use search::{DirectedEdges, Crawler};
 use serde::Deserialize;
 use tokio::sync::Mutex;
 
-use crate::{
-    label::cache::LabelCache,
-    search::{etherscan::EtherscanCrawler, SimpleEdges},
-};
+use crate::{label::cache::LabelCache, search::etherscan::EtherscanCrawler, crawler::crawl};
+mod crawler;
 mod label;
 mod search;
 
 const FAN_OUT_LIMIT: usize = 500;
+const RECURSIVE_DEPTH: usize = 3;
+const ENABLE_FORWARD: bool = true;
+const ENABLE_BACKWARD: bool = true;
+const DEFAULT_MODE: SearchMode = SearchMode::DepthFirst;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -25,7 +25,7 @@ struct Args {
     fan_out_limit: Option<usize>,
 
     #[arg(short, long)]
-    recursive_depth: Option<u32>,
+    recursive_depth: Option<usize>,
 
     #[arg(long)]
     forward: Option<bool>,
@@ -38,9 +38,9 @@ struct Args {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-struct SearchSettings {
+pub struct SearchSettings {
     fan_out_limit: usize,
-    recursive_depth: u32,
+    recursive_depth: usize,
     forward: bool,
     backward: bool,
     mode: SearchMode,
@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
     let mut l = seen.lock().await;
     l.push(address);
     drop(l);
-    walk(
+    crawl(
         address,
         &etherscan_crawler,
         &label_cache_client,
@@ -89,79 +89,13 @@ async fn main() -> anyhow::Result<()> {
         0,
         &SearchSettings {
             fan_out_limit: args.fan_out_limit.unwrap_or(FAN_OUT_LIMIT),
-            recursive_depth: args.recursive_depth.unwrap_or(2),
-            forward: args.forward.unwrap_or(true),
-            backward: args.backward.unwrap_or(true),
-            mode: args.mode.unwrap_or(SearchMode::DepthFirst),
+            recursive_depth: args.recursive_depth.unwrap_or(RECURSIVE_DEPTH),
+            forward: args.forward.unwrap_or(ENABLE_FORWARD),
+            backward: args.backward.unwrap_or(ENABLE_BACKWARD),
+            mode: args.mode.unwrap_or(DEFAULT_MODE),
         },
     )
     .await?;
     println!("Done!");
-    Ok(())
-}
-
-#[async_recursion]
-async fn walk(
-    address: Address,
-    etherscan_crawler: &EtherscanCrawler,
-    label_cache_client: &LabelCache,
-    seen: Arc<Mutex<Vec<Address>>>,
-    mut current_depth: u32,
-    settings: &SearchSettings,
-) -> anyhow::Result<()> {
-    current_depth += 1;
-    if current_depth > settings.recursive_depth {
-        println!("Reached max depth");
-        return Ok(());
-    }
-    let neighbor_edges = etherscan_crawler.get_edges(&address).await;
-    let mut new_nodes = vec![];
-    let mut seen_unlocked = seen.lock().await;
-    for edge in neighbor_edges {
-        match edge {
-            DirectedEdges::Forward(edge) => {
-                if settings.forward && !seen_unlocked.contains(&edge.to) {
-                    new_nodes.push(edge.to);
-                    seen_unlocked.push(edge.to);
-                }
-                let simple_edge: SimpleEdges = edge.into();
-                println!("Edge:{}", serde_json::to_string(&simple_edge)?);
-            }
-            DirectedEdges::Backward(edge) => {
-                if settings.backward && !seen_unlocked.contains(&edge.from) {
-                    new_nodes.push(edge.from);
-                    seen_unlocked.push(edge.from);
-                }
-                let simple_edge: SimpleEdges = edge.into();
-                println!("Edge:{}", serde_json::to_string(&simple_edge)?);
-            }
-        }
-    }
-    drop(seen_unlocked);
-    let labelled_addresses = label_cache_client.get_labels(new_nodes.clone()).await;
-    for node in new_nodes {
-        let label = labelled_addresses.get(&node);
-        match label {
-            Some(label) => println!(
-                "Node: id=[{:?}] label=[{}] depth=[{}]",
-                node, label, current_depth
-            ),
-            None => {
-                println!(
-                    "Node: id=[{:?}] label=[UNLABELLED] depth=[{}]",
-                    node, current_depth
-                );
-                walk(
-                    node,
-                    etherscan_crawler,
-                    label_cache_client,
-                    Arc::clone(&seen),
-                    current_depth,
-                    settings,
-                )
-                .await?;
-            }
-        }
-    }
     Ok(())
 }
